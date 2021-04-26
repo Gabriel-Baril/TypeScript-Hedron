@@ -4,3 +4,4 @@ Properties
 .vs
 *.sln
 /TypeScript-Hedron/packages
+*.map
