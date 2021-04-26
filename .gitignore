@@ -1,0 +1,6 @@
+bin
+obj
+Properties
+.vs
+*.sln
+/TypeScript-Hedron/packages
