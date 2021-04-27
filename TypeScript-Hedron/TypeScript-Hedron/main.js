@@ -18,10 +18,12 @@ var Hedron;
         }
         Engine.prototype.start = function () {
             this._canvas = Hedron.GLUtilities.init("main-context");
+            Hedron.AssetManager.init();
             Hedron.gl.clearColor(0, 0, 0, 1);
             this.loadShaders();
             this._shader.use();
-            this._sprite = new Hedron.Sprite("test");
+            this._sprite = new Hedron.Sprite("test", "assets/textures/collectibles_004_cricketshead.png");
+            this._sprite.position = new Hedron.Vec3(300, 200, 0);
             this._sprite.load();
             this.resize();
             this.loop();
@@ -39,21 +41,23 @@ var Hedron;
         };
         Engine.prototype.loop = function () {
             this._frameCount++;
+            Hedron.MessageBus.update(0);
             Hedron.gl.clear(Hedron.gl.COLOR_BUFFER_BIT);
             // Set uniforms
-            var colorPosition = this._shader.getUniformLocation("u_color");
+            var colorPosition = this._shader.getUniformLocation("u_tintColor");
             Hedron.gl.uniform4f(colorPosition, 1, 0.5, 0, 1);
+            //gl.uniform4f(colorPosition, 1, 1, 1, 1);
             var projectionPosition = this._shader.getUniformLocation("u_projection");
             Hedron.gl.uniformMatrix4fv(projectionPosition, false, new Float32Array(this._projection.data));
             var modelPosition = this._shader.getUniformLocation("u_model");
             var translationMat = Hedron.Matrix4x4.translation(this._sprite.position);
             Hedron.gl.uniformMatrix4fv(modelPosition, false, new Float32Array(translationMat.data));
-            this._sprite.draw();
+            this._sprite.draw(this._shader);
             requestAnimationFrame(this.loop.bind(this)); // Call this.loop on this specific instance to emulate an infinite loop
         };
         Engine.prototype.loadShaders = function () {
-            var vertexShaderSource = "\nattribute vec3 a_position;\n\nuniform mat4 u_projection;\nuniform mat4 u_model;\n\nvoid main() {\n    gl_Position = u_projection * u_model * vec4(a_position, 1.0);\n}";
-            var fragmentShaderSource = "\nprecision mediump float;\n\nuniform vec4 u_color;\n\nvoid main() {\n    gl_FragColor = u_color;\n}\n";
+            var vertexShaderSource = "\nattribute vec3 a_position;\nattribute vec2 a_texCoord;\n\nuniform mat4 u_projection;\nuniform mat4 u_model;\n\nvarying vec2 v_texCoord;\n\nvoid main() {\n    gl_Position = u_projection * u_model * vec4(a_position, 1.0);\n    v_texCoord = a_texCoord;\n}";
+            var fragmentShaderSource = "\nprecision mediump float;\n\nuniform vec4 u_tintColor;\nuniform sampler2D u_diffuse;\n\nvarying vec2 v_texCoord;\n\nvoid main() {\n    gl_FragColor = u_tintColor * texture2D(u_diffuse, v_texCoord);\n}\n";
             this._shader = new Hedron.Shader("basic", vertexShaderSource, fragmentShaderSource);
         };
         return Engine;
@@ -340,28 +344,47 @@ var Hedron;
 var Hedron;
 (function (Hedron) {
     var Sprite = /** @class */ (function () {
-        function Sprite(name, width, height) {
+        function Sprite(name, textureName, width, height) {
             if (width === void 0) { width = 100; }
             if (height === void 0) { height = 100; }
             this.position = new Hedron.Vec3();
             this._name = name;
             this._width = width;
             this._height = height;
+            this._textureName = textureName;
+            this._texture = Hedron.TextureManager.getTexture(this._textureName);
         }
+        Object.defineProperty(Sprite.prototype, "name", {
+            get: function () {
+                return this._name;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Sprite.prototype.destroy = function () {
+            this._buffer.destroy();
+            Hedron.TextureManager.releaseTexture(this._textureName);
+        };
         Sprite.prototype.load = function () {
-            this._buffer = new Hedron.GLBuffer(3);
+            this._buffer = new Hedron.GLBuffer(5);
             var positionAttribute = new Hedron.AttributeInfo();
             positionAttribute.location = 0;
             positionAttribute.offset = 0;
             positionAttribute.size = 3;
             this._buffer.addAttribute(positionAttribute);
+            var texCoordAttribute = new Hedron.AttributeInfo();
+            texCoordAttribute.location = 1;
+            texCoordAttribute.offset = 3;
+            texCoordAttribute.size = 2;
+            this._buffer.addAttribute(texCoordAttribute);
             var vertices = [
-                0, 0, 0,
-                0, this._height, 0,
-                this._width, this._height, 0,
-                this._width, this._height, 0,
-                this._width, 0, 0,
-                0, 0, 0,
+                // x,y,z,u,v
+                0, 0, 0, 0, 0,
+                0, this._height, 0, 0, 1.0,
+                this._width, this._height, 0, 1.0, 1.0,
+                this._width, this._height, 0, 1.0, 1.0,
+                this._width, 0, 0, 1.0, 0,
+                0, 0, 0, 0, 0
             ];
             this._buffer.pushBackData(vertices);
             this._buffer.upload();
@@ -369,7 +392,10 @@ var Hedron;
         };
         Sprite.prototype.update = function (time) {
         };
-        Sprite.prototype.draw = function () {
+        Sprite.prototype.draw = function (shader) {
+            this._texture.activateAndBind(0);
+            var diffuseLocation = shader.getUniformLocation("u_diffuse");
+            Hedron.gl.uniform1i(diffuseLocation, 0);
             this._buffer.bind();
             this._buffer.draw();
         };
@@ -494,12 +520,13 @@ var Hedron;
             var extension = assetName.split('.').pop().toLowerCase();
             for (var _i = 0, _a = AssetManager._loaders; _i < _a.length; _i++) {
                 var loader = _a[_i];
+                console.log(loader.supportedExtensions);
                 if (loader.supportedExtensions.indexOf(extension) !== -1) {
                     loader.loadAsset(assetName);
                     return;
                 }
             }
-            console.warn("Unable to load asset with extension " + extension + " because there is no loader associated with it.");
+            console.warn("Unable to load asset with extension '" + extension + "' because there is no loader associated with it.");
         };
         AssetManager.isAssetLoaded = function (assetName) {
             return AssetManager._loadedAssets[assetName] !== undefined;
@@ -662,10 +689,185 @@ var Hedron;
         ImageAssetLoader.prototype.onImageLoaded = function (assetName, image) {
             console.log("onImageLoaded: assetName/image", assetName, image);
             var asset = new ImageAsset(assetName, image);
+            // Message.send(MESSAGE_ASSET_LOADER_ASSET_LOADED + assetName, asset);
             Hedron.AssetManager.onAssetLoaded(asset);
         };
         return ImageAssetLoader;
     }());
     Hedron.ImageAssetLoader = ImageAssetLoader;
+})(Hedron || (Hedron = {}));
+var Hedron;
+(function (Hedron) {
+    var Vec2 = /** @class */ (function () {
+        function Vec2(x, y) {
+            if (x === void 0) { x = 0; }
+            if (y === void 0) { y = 0; }
+            this._x = x;
+            this._y = y;
+        }
+        Object.defineProperty(Vec2.prototype, "x", {
+            get: function () {
+                return this._x;
+            },
+            set: function (value) {
+                this._x = value;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Object.defineProperty(Vec2.prototype, "y", {
+            get: function () {
+                return this._y;
+            },
+            set: function (value) {
+                this._y = value;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Vec2.prototype.toArray = function () {
+            return [this._x, this._y];
+        };
+        Vec2.prototype.toFloat32Array = function () {
+            return new Float32Array(this.toArray());
+        };
+        return Vec2;
+    }());
+    Hedron.Vec2 = Vec2;
+})(Hedron || (Hedron = {}));
+var Hedron;
+(function (Hedron) {
+    var LEVEL = 0;
+    var BORDER = 0;
+    var TEMP_IMAGE_DATA = new Uint8Array([255, 255, 255, 255]);
+    var Texture = /** @class */ (function () {
+        function Texture(name, width, height) {
+            if (width === void 0) { width = 1; }
+            if (height === void 0) { height = 1; }
+            this._isLoaded = false;
+            this._name = name;
+            this._width = width;
+            this._height = height;
+            this._handle = Hedron.gl.createTexture();
+            Hedron.Message.subscribe(Hedron.MESSAGE_ASSET_LOADER_ASSET_LOADED + this._name, this);
+            this.bind();
+            Hedron.gl.texImage2D(Hedron.gl.TEXTURE_2D, LEVEL, Hedron.gl.RGBA, 1, 1, BORDER, Hedron.gl.RGBA, Hedron.gl.UNSIGNED_BYTE, TEMP_IMAGE_DATA);
+            var asset = Hedron.AssetManager.getAsset(this._name);
+            if (asset !== undefined) {
+                this.loadTextureFromAsset(asset);
+            }
+        }
+        Texture.prototype.destroy = function () {
+            Hedron.gl.deleteTexture(this._handle);
+        };
+        Texture.prototype.activateAndBind = function (textureUnit) {
+            if (textureUnit === void 0) { textureUnit = 0; }
+            Hedron.gl.activeTexture(Hedron.gl.TEXTURE0 + textureUnit);
+            this.bind();
+        };
+        Texture.prototype.bind = function () {
+            Hedron.gl.bindTexture(Hedron.gl.TEXTURE_2D, this._handle);
+        };
+        Texture.prototype.unbind = function () {
+            Hedron.gl.bindTexture(Hedron.gl.TEXTURE_2D, undefined);
+        };
+        Texture.prototype.loadTextureFromAsset = function (asset) {
+            this._width = asset.width;
+            this._height = asset.height;
+            this.bind();
+            Hedron.gl.texImage2D(Hedron.gl.TEXTURE_2D, LEVEL, Hedron.gl.RGBA, Hedron.gl.RGBA, Hedron.gl.UNSIGNED_BYTE, asset.data);
+            if (this.isPowerOfTwo()) {
+                Hedron.gl.generateMipmap(Hedron.gl.TEXTURE_2D);
+            }
+            else {
+                // Do not generate a mip map and clamp wrapping to edge.
+                Hedron.gl.texParameteri(Hedron.gl.TEXTURE_2D, Hedron.gl.TEXTURE_WRAP_S, Hedron.gl.CLAMP_TO_EDGE);
+                Hedron.gl.texParameteri(Hedron.gl.TEXTURE_2D, Hedron.gl.TEXTURE_WRAP_T, Hedron.gl.CLAMP_TO_EDGE);
+                Hedron.gl.texParameteri(Hedron.gl.TEXTURE_2D, Hedron.gl.TEXTURE_MIN_FILTER, Hedron.gl.LINEAR);
+            }
+            this._isLoaded = true;
+        };
+        Texture.prototype.isPowerOfTwo = function () {
+            return (this.isValuePowerOfTwo(this.width) && this.isValuePowerOfTwo(this.height));
+        };
+        Texture.prototype.isValuePowerOfTwo = function (value) {
+            return (value & (value - 1)) == 0;
+        };
+        Object.defineProperty(Texture.prototype, "name", {
+            get: function () {
+                return this._name;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Object.defineProperty(Texture.prototype, "isLoaded", {
+            get: function () {
+                return this._isLoaded;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Object.defineProperty(Texture.prototype, "width", {
+            get: function () {
+                return this._width;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Object.defineProperty(Texture.prototype, "height", {
+            get: function () {
+                return this._height;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Texture.prototype.onMessage = function (message) {
+            if (message.code === Hedron.MESSAGE_ASSET_LOADER_ASSET_LOADED + this._name) {
+                this.loadTextureFromAsset(message.context);
+            }
+        };
+        return Texture;
+    }());
+    Hedron.Texture = Texture;
+})(Hedron || (Hedron = {}));
+var Hedron;
+(function (Hedron) {
+    var TextureReferenceNode = /** @class */ (function () {
+        function TextureReferenceNode(texture) {
+            this.referenceCount = 1;
+            this.texture = texture;
+        }
+        return TextureReferenceNode;
+    }());
+    var TextureManager = /** @class */ (function () {
+        function TextureManager() {
+        }
+        TextureManager.getTexture = function (textureName) {
+            if (TextureManager._textures[textureName] === undefined) {
+                var texture = new Hedron.Texture(textureName);
+                TextureManager._textures[textureName] = new TextureReferenceNode(texture);
+            }
+            else {
+                TextureManager._textures[textureName].referenceCount++;
+            }
+            return TextureManager._textures[textureName].texture;
+        };
+        TextureManager.releaseTexture = function (textureName) {
+            if (TextureManager._textures[textureName] === undefined) {
+                console.warn("A texture named " + textureName + "does not exist ");
+            }
+            else {
+                TextureManager._textures[textureName].referenceCount--;
+                if (TextureManager._textures[textureName].referenceCount < 1) {
+                    TextureManager._textures[textureName].texture.destroy();
+                    TextureManager._textures[textureName] = undefined;
+                    delete TextureManager._textures[textureName];
+                }
+            }
+        };
+        TextureManager._textures = {};
+        return TextureManager;
+    }());
+    Hedron.TextureManager = TextureManager;
 })(Hedron || (Hedron = {}));
 //# sourceMappingURL=main.js.map

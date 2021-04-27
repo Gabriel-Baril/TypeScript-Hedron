@@ -24,22 +24,24 @@
 
         public static loadAsset(assetName: string): void {
             const extension = assetName.split('.').pop().toLowerCase();
+            
             for (let loader of AssetManager._loaders) {
+                console.log(loader.supportedExtensions);
                 if (loader.supportedExtensions.indexOf(extension) !== -1) {
                     loader.loadAsset(assetName);
                     return;
                 }
             }
-            console.warn("Unable to load asset with extension " + extension + " because there is no loader associated with it.");
+            console.warn("Unable to load asset with extension '" + extension + "' because there is no loader associated with it.");
         }
 
         public static isAssetLoaded(assetName: string): boolean {
             return AssetManager._loadedAssets[assetName] !== undefined;
         }
 
-        public static getAsset(assetName: string): IAsset {
+        public static getAsset<AssetType extends IAsset>(assetName: string): AssetType {
             if (AssetManager.isAssetLoaded(assetName)) {
-                return AssetManager._loadedAssets[assetName];
+                return AssetManager._loadedAssets[assetName] as AssetType;
             } else {
                 AssetManager.loadAsset(assetName);
             }

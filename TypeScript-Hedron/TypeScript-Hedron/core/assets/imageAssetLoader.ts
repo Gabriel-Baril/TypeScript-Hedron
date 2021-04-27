@@ -31,6 +31,7 @@
         private onImageLoaded(assetName: string, image: HTMLImageElement): void {
             console.log("onImageLoaded: assetName/image", assetName, image);
             const asset = new ImageAsset(assetName, image);
+            // Message.send(MESSAGE_ASSET_LOADER_ASSET_LOADED + assetName, asset);
             AssetManager.onAssetLoaded(asset);
         }
     }
