@@ -7,7 +7,9 @@
         private _canvas: HTMLCanvasElement;
         private _shader: Shader;
 
-        private _buffer: GLBuffer; // A container of data to be pushed to the graphics card
+        private _sprite: Sprite;
+        private _projection: Matrix4x4;
+
 
         public constructor() {
             this._frameCount = 0;
@@ -15,14 +17,19 @@
 
         public start(): void {
             this._canvas = GLUtilities.init("main-context");
+            this.resize();
             gl.clearColor(0, 0, 0, 1);
 
             this.loadShaders();
             this._shader.use();
 
-            this.createBuffer();
+            // Load
+            this._projection = Matrix4x4.orthographic(0, this._canvas.width, 0, this._canvas.height, -100, 100);
 
-            this.resize();
+            this._sprite = new Sprite("test");
+            this._sprite.load();
+            this._sprite.position.x = 0;
+
             this.loop();
         }
 
@@ -46,41 +53,27 @@
             const colorPosition = this._shader.getUniformLocation("u_color");
             gl.uniform4f(colorPosition, 1, 0.5, 0, 1);
 
-            this._buffer.bind();
-            this._buffer.draw();
+            const projectionPosition = this._shader.getUniformLocation("u_projection");
+            gl.uniformMatrix4fv(projectionPosition, false, new Float32Array(this._projection.data));
+
+            const modelPosition = this._shader.getUniformLocation("u_model");
+            const translationMat = Matrix4x4.translation(this._sprite.position);
+            gl.uniformMatrix4fv(modelPosition, false, new Float32Array(translationMat.data));
+
+            this._sprite.draw();
 
             requestAnimationFrame(this.loop.bind(this)); // Call this.loop on this specific instance to emulate an infinite loop
-        }
-
-        private createBuffer(): void {
-            this._buffer = new GLBuffer(3);
-
-            let positionAttribute = new AttributeInfo();
-            positionAttribute.location = this._shader.getAttributeLocation("a_position");
-            positionAttribute.offset = 0;
-            positionAttribute.size = 3;
-            this._buffer.addAttribute(positionAttribute);
-
-            const vertices = [
-                0, 0, 0,
-                0, 0.5, 0,
-                0.5, 0.5, 0,
-                0.5, 0.5, 0,
-                0.5, 0, 0,
-                0, 0, 0,
-            ]
-
-            this._buffer.pushBackData(vertices);
-            this._buffer.upload();
-            this._buffer.unbind();
         }
 
         private loadShaders(): void {
             const vertexShaderSource: string = `
 attribute vec3 a_position;
 
+uniform mat4 u_projection;
+uniform mat4 u_model;
+
 void main() {
-    gl_Position = vec4(a_position, 1.0);
+    gl_Position = u_projection * u_model * vec4(a_position, 1.0);
 }`;
             const fragmentShaderSource: string = `
 precision mediump float;

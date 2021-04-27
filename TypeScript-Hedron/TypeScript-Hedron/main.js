@@ -18,11 +18,15 @@ var Hedron;
         }
         Engine.prototype.start = function () {
             this._canvas = Hedron.GLUtilities.init("main-context");
+            this.resize();
             Hedron.gl.clearColor(0, 0, 0, 1);
             this.loadShaders();
             this._shader.use();
-            this.createBuffer();
-            this.resize();
+            // Load
+            this._projection = Hedron.Matrix4x4.orthographic(0, this._canvas.width, 0, this._canvas.height, -100, 100);
+            this._sprite = new Hedron.Sprite("test");
+            this._sprite.load();
+            this._sprite.position.x = 0;
             this.loop();
         };
         /**
@@ -41,31 +45,16 @@ var Hedron;
             // Set uniforms
             var colorPosition = this._shader.getUniformLocation("u_color");
             Hedron.gl.uniform4f(colorPosition, 1, 0.5, 0, 1);
-            this._buffer.bind();
-            this._buffer.draw();
+            var projectionPosition = this._shader.getUniformLocation("u_projection");
+            Hedron.gl.uniformMatrix4fv(projectionPosition, false, new Float32Array(this._projection.data));
+            var modelPosition = this._shader.getUniformLocation("u_model");
+            var translationMat = Hedron.Matrix4x4.translation(this._sprite.position);
+            Hedron.gl.uniformMatrix4fv(modelPosition, false, new Float32Array(translationMat.data));
+            this._sprite.draw();
             requestAnimationFrame(this.loop.bind(this)); // Call this.loop on this specific instance to emulate an infinite loop
         };
-        Engine.prototype.createBuffer = function () {
-            this._buffer = new Hedron.GLBuffer(3);
-            var positionAttribute = new Hedron.AttributeInfo();
-            positionAttribute.location = this._shader.getAttributeLocation("a_position");
-            positionAttribute.offset = 0;
-            positionAttribute.size = 3;
-            this._buffer.addAttribute(positionAttribute);
-            var vertices = [
-                0, 0, 0,
-                0, 0.5, 0,
-                0.5, 0.5, 0,
-                0.5, 0.5, 0,
-                0.5, 0, 0,
-                0, 0, 0,
-            ];
-            this._buffer.pushBackData(vertices);
-            this._buffer.upload();
-            this._buffer.unbind();
-        };
         Engine.prototype.loadShaders = function () {
-            var vertexShaderSource = "\nattribute vec3 a_position;\n\nvoid main() {\n    gl_Position = vec4(a_position, 1.0);\n}";
+            var vertexShaderSource = "\nattribute vec3 a_position;\n\nuniform mat4 u_projection;\nuniform mat4 u_model;\n\nvoid main() {\n    gl_Position = u_projection * u_model * vec4(a_position, 1.0);\n}";
             var fragmentShaderSource = "\nprecision mediump float;\n\nuniform vec4 u_color;\n\nvoid main() {\n    gl_FragColor = u_color;\n}\n";
             this._shader = new Hedron.Shader("basic", vertexShaderSource, fragmentShaderSource);
         };
@@ -349,5 +338,142 @@ var Hedron;
         return GLBuffer;
     }());
     Hedron.GLBuffer = GLBuffer;
+})(Hedron || (Hedron = {}));
+var Hedron;
+(function (Hedron) {
+    var Sprite = /** @class */ (function () {
+        function Sprite(name, width, height) {
+            if (width === void 0) { width = 100; }
+            if (height === void 0) { height = 100; }
+            this.position = new Hedron.Vec3();
+            this._name = name;
+            this._width = width;
+            this._height = height;
+        }
+        Sprite.prototype.load = function () {
+            this._buffer = new Hedron.GLBuffer(3);
+            var positionAttribute = new Hedron.AttributeInfo();
+            positionAttribute.location = 0;
+            positionAttribute.offset = 0;
+            positionAttribute.size = 3;
+            this._buffer.addAttribute(positionAttribute);
+            var vertices = [
+                0, 0, 0,
+                0, this._height, 0,
+                this._width, this._height, 0,
+                this._width, this._height, 0,
+                this._width, 0, 0,
+                0, 0, 0,
+            ];
+            this._buffer.pushBackData(vertices);
+            this._buffer.upload();
+            this._buffer.unbind();
+        };
+        Sprite.prototype.update = function (time) {
+        };
+        Sprite.prototype.draw = function () {
+            this._buffer.bind();
+            this._buffer.draw();
+        };
+        return Sprite;
+    }());
+    Hedron.Sprite = Sprite;
+})(Hedron || (Hedron = {}));
+var Hedron;
+(function (Hedron) {
+    var Matrix4x4 = /** @class */ (function () {
+        function Matrix4x4() {
+            this._data = [];
+            this._data = [
+                1, 0, 0, 0,
+                0, 1, 0, 0,
+                0, 0, 1, 0,
+                0, 0, 0, 1,
+            ];
+        }
+        Object.defineProperty(Matrix4x4.prototype, "data", {
+            get: function () {
+                return this._data;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Matrix4x4.identity = function () {
+            return new Matrix4x4();
+        };
+        Matrix4x4.orthographic = function (left, right, bottom, top, nearClip, farClip) {
+            var mat = Matrix4x4.identity();
+            var lr = 1.0 / (left - right);
+            var bt = 1.0 / (bottom - top);
+            var nf = 1.0 / (nearClip - farClip);
+            mat._data[0] = -2.0 * lr;
+            mat._data[5] = -2.0 * bt;
+            mat._data[10] = 2.0 * nf;
+            mat._data[12] = (left + right) * lr;
+            mat._data[13] = (top + bottom) * bt;
+            mat._data[14] = (farClip + nearClip) * nf;
+            return mat;
+        };
+        Matrix4x4.translation = function (position) {
+            var mat = Matrix4x4.identity();
+            mat._data[12] = position.x;
+            mat._data[13] = position.y;
+            mat._data[14] = position.z;
+            return mat;
+        };
+        return Matrix4x4;
+    }());
+    Hedron.Matrix4x4 = Matrix4x4;
+})(Hedron || (Hedron = {}));
+var Hedron;
+(function (Hedron) {
+    var Vec3 = /** @class */ (function () {
+        function Vec3(x, y, z) {
+            if (x === void 0) { x = 0; }
+            if (y === void 0) { y = 0; }
+            if (z === void 0) { z = 0; }
+            this._x = x;
+            this._y = y;
+            this._z = z;
+        }
+        Object.defineProperty(Vec3.prototype, "x", {
+            get: function () {
+                return this._x;
+            },
+            set: function (value) {
+                this._x = value;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Object.defineProperty(Vec3.prototype, "y", {
+            get: function () {
+                return this._y;
+            },
+            set: function (value) {
+                this._y = value;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Object.defineProperty(Vec3.prototype, "z", {
+            get: function () {
+                return this._z;
+            },
+            set: function (value) {
+                this._z = value;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Vec3.prototype.toArray = function () {
+            return [this._x, this._y, this._z];
+        };
+        Vec3.prototype.toFloat32Array = function () {
+            return new Float32Array(this.toArray());
+        };
+        return Vec3;
+    }());
+    Hedron.Vec3 = Vec3;
 })(Hedron || (Hedron = {}));
 //# sourceMappingURL=main.js.map
