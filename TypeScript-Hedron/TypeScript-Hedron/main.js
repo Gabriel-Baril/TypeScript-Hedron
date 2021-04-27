@@ -18,15 +18,12 @@ var Hedron;
         }
         Engine.prototype.start = function () {
             this._canvas = Hedron.GLUtilities.init("main-context");
-            this.resize();
             Hedron.gl.clearColor(0, 0, 0, 1);
             this.loadShaders();
             this._shader.use();
-            // Load
-            this._projection = Hedron.Matrix4x4.orthographic(0, this._canvas.width, 0, this._canvas.height, -100, 100);
             this._sprite = new Hedron.Sprite("test");
             this._sprite.load();
-            this._sprite.position.x = 0;
+            this.resize();
             this.loop();
         };
         /**
@@ -37,6 +34,7 @@ var Hedron;
                 this._canvas.width = window.innerWidth; // Represent the width of the page of our client
                 this._canvas.height = window.innerHeight; // Represent the height of the page of our client
                 Hedron.gl.viewport(0, 0, this._canvas.width, this._canvas.height);
+                this._projection = Hedron.Matrix4x4.orthographic(0, this._canvas.width, 0, this._canvas.height, -100, 100);
             }
         };
         Engine.prototype.loop = function () {
@@ -475,5 +473,199 @@ var Hedron;
         return Vec3;
     }());
     Hedron.Vec3 = Vec3;
+})(Hedron || (Hedron = {}));
+var Hedron;
+(function (Hedron) {
+    Hedron.MESSAGE_ASSET_LOADER_ASSET_LOADED = "MESSAGE_ASSET_LOADER_ASSET_LOADED::";
+    var AssetManager = /** @class */ (function () {
+        function AssetManager() {
+        }
+        AssetManager.init = function () {
+            AssetManager.registerLoader(new Hedron.ImageAssetLoader());
+        };
+        AssetManager.registerLoader = function (loader) {
+            AssetManager._loaders.push(loader);
+        };
+        AssetManager.onAssetLoaded = function (asset) {
+            AssetManager._loadedAssets[asset.name] = asset;
+            Hedron.Message.send(Hedron.MESSAGE_ASSET_LOADER_ASSET_LOADED + asset.name, this, asset); // emit
+        };
+        AssetManager.loadAsset = function (assetName) {
+            var extension = assetName.split('.').pop().toLowerCase();
+            for (var _i = 0, _a = AssetManager._loaders; _i < _a.length; _i++) {
+                var loader = _a[_i];
+                if (loader.supportedExtensions.indexOf(extension) !== -1) {
+                    loader.loadAsset(assetName);
+                    return;
+                }
+            }
+            console.warn("Unable to load asset with extension " + extension + " because there is no loader associated with it.");
+        };
+        AssetManager.isAssetLoaded = function (assetName) {
+            return AssetManager._loadedAssets[assetName] !== undefined;
+        };
+        AssetManager.getAsset = function (assetName) {
+            if (AssetManager.isAssetLoaded(assetName)) {
+                return AssetManager._loadedAssets[assetName];
+            }
+            else {
+                AssetManager.loadAsset(assetName);
+            }
+            return undefined;
+        };
+        AssetManager._loaders = [];
+        AssetManager._loadedAssets = {};
+        return AssetManager;
+    }());
+    Hedron.AssetManager = AssetManager;
+})(Hedron || (Hedron = {}));
+var Hedron;
+(function (Hedron) {
+    var MessagePriority;
+    (function (MessagePriority) {
+        MessagePriority[MessagePriority["NORMAL"] = 0] = "NORMAL";
+        MessagePriority[MessagePriority["HIGH"] = 1] = "HIGH";
+    })(MessagePriority = Hedron.MessagePriority || (Hedron.MessagePriority = {}));
+    var Message = /** @class */ (function () {
+        function Message(code, sender, context, priority) {
+            if (priority === void 0) { priority = MessagePriority.NORMAL; }
+            this.code = code;
+            this.sender = sender;
+            this.context = context;
+            this.priority = priority;
+        }
+        Message.send = function (code, sender, context) {
+            Hedron.MessageBus.post(new Message(code, sender, context, MessagePriority.NORMAL));
+        };
+        Message.sendPriority = function (code, sender, context) {
+            Hedron.MessageBus.post(new Message(code, sender, context, MessagePriority.HIGH));
+        };
+        Message.subscribe = function (code, handler) {
+            Hedron.MessageBus.addSubscription(code, handler);
+        };
+        Message.unsubscribe = function (code, handler) {
+            Hedron.MessageBus.removeSubscription(code, handler);
+        };
+        return Message;
+    }());
+    Hedron.Message = Message;
+})(Hedron || (Hedron = {}));
+var Hedron;
+(function (Hedron) {
+    var MessageBus = /** @class */ (function () {
+        function MessageBus() {
+        }
+        MessageBus.addSubscription = function (code, handler) {
+            if (MessageBus._subscriptions[code] === undefined) {
+                MessageBus._subscriptions[code] = [];
+            }
+            if (MessageBus._subscriptions[code].indexOf(handler) !== -1) {
+                console.warn("Attempting to add a duplicate handler to code: " + code + ". Subscription not added.");
+            }
+            else {
+                MessageBus._subscriptions[code].push(handler);
+            }
+        };
+        MessageBus.removeSubscription = function (code, handler) {
+            if (MessageBus._subscriptions[code] === undefined) {
+                console.warn("Cannot unsubscribe handler from code: " + code + " because that code is not subscribed to.");
+                return;
+            }
+            var nodeIndex = MessageBus._subscriptions[code].indexOf(handler);
+            if (nodeIndex !== -1) {
+                MessageBus._subscriptions[code].splice(nodeIndex, 1);
+            }
+        };
+        MessageBus.post = function (message) {
+            console.log("Message posted:", message);
+            var handlers = MessageBus._subscriptions[message.code];
+            if (handlers === undefined) {
+                return;
+            }
+            for (var _i = 0, handlers_1 = handlers; _i < handlers_1.length; _i++) {
+                var handler = handlers_1[_i];
+                if (message.priority === Hedron.MessagePriority.HIGH) {
+                    handler.onMessage(message);
+                }
+                else {
+                    MessageBus._normalMessageQueue.push(new Hedron.MessageSubscriptionNode(message, handler));
+                }
+            }
+        };
+        MessageBus.update = function (time) {
+            if (MessageBus._normalMessageQueue.length === 0) {
+                return;
+            }
+            var messageLimit = Math.min(MessageBus._normalQueueMessagePerUpdate, MessageBus._normalMessageQueue.length);
+            for (var i = 0; i < messageLimit; i++) {
+                var node = MessageBus._normalMessageQueue.pop();
+                node.handler.onMessage(node.message);
+            }
+        };
+        MessageBus._subscriptions = {};
+        MessageBus._normalQueueMessagePerUpdate = 10;
+        MessageBus._normalMessageQueue = [];
+        return MessageBus;
+    }());
+    Hedron.MessageBus = MessageBus;
+})(Hedron || (Hedron = {}));
+var Hedron;
+(function (Hedron) {
+    var MessageSubscriptionNode = /** @class */ (function () {
+        function MessageSubscriptionNode(message, handler) {
+            this.message = message;
+            this.handler = handler;
+        }
+        return MessageSubscriptionNode;
+    }());
+    Hedron.MessageSubscriptionNode = MessageSubscriptionNode;
+})(Hedron || (Hedron = {}));
+var Hedron;
+(function (Hedron) {
+    var ImageAsset = /** @class */ (function () {
+        function ImageAsset(name, data) {
+            this.name = name;
+            this.data = data;
+        }
+        Object.defineProperty(ImageAsset.prototype, "width", {
+            get: function () {
+                return this.data.width;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Object.defineProperty(ImageAsset.prototype, "height", {
+            get: function () {
+                return this.data.height;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        return ImageAsset;
+    }());
+    Hedron.ImageAsset = ImageAsset;
+    var ImageAssetLoader = /** @class */ (function () {
+        function ImageAssetLoader() {
+        }
+        Object.defineProperty(ImageAssetLoader.prototype, "supportedExtensions", {
+            get: function () {
+                return ['png', 'gif', 'jpg'];
+            },
+            enumerable: false,
+            configurable: true
+        });
+        ImageAssetLoader.prototype.loadAsset = function (assetName) {
+            var image = new Image();
+            image.onload = this.onImageLoaded.bind(this, assetName, image);
+            image.src = assetName;
+        };
+        ImageAssetLoader.prototype.onImageLoaded = function (assetName, image) {
+            console.log("onImageLoaded: assetName/image", assetName, image);
+            var asset = new ImageAsset(assetName, image);
+            Hedron.AssetManager.onAssetLoaded(asset);
+        };
+        return ImageAssetLoader;
+    }());
+    Hedron.ImageAssetLoader = ImageAssetLoader;
 })(Hedron || (Hedron = {}));
 //# sourceMappingURL=main.js.map

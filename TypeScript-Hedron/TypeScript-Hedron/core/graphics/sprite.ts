@@ -22,7 +22,7 @@
             positionAttribute.offset = 0;
             positionAttribute.size = 3;
             this._buffer.addAttribute(positionAttribute);
-
+            
             const vertices = [
                 0, 0, 0,
                 0, this._height, 0,

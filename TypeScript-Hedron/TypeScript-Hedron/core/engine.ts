@@ -4,6 +4,7 @@
      * */
     export class Engine {
         private _frameCount: number;
+
         private _canvas: HTMLCanvasElement;
         private _shader: Shader;
 
@@ -17,18 +18,15 @@
 
         public start(): void {
             this._canvas = GLUtilities.init("main-context");
-            this.resize();
             gl.clearColor(0, 0, 0, 1);
 
             this.loadShaders();
             this._shader.use();
 
-            // Load
-            this._projection = Matrix4x4.orthographic(0, this._canvas.width, 0, this._canvas.height, -100, 100);
-
             this._sprite = new Sprite("test");
             this._sprite.load();
-            this._sprite.position.x = 0;
+
+            this.resize();
 
             this.loop();
         }
@@ -42,6 +40,7 @@
                 this._canvas.height = window.innerHeight; // Represent the height of the page of our client
 
                 gl.viewport(0, 0, this._canvas.width, this._canvas.height);
+                this._projection = Matrix4x4.orthographic(0, this._canvas.width, 0, this._canvas.height, -100, 100);
             }
         }
 
@@ -61,7 +60,6 @@
             gl.uniformMatrix4fv(modelPosition, false, new Float32Array(translationMat.data));
 
             this._sprite.draw();
-
             requestAnimationFrame(this.loop.bind(this)); // Call this.loop on this specific instance to emulate an infinite loop
         }
 
