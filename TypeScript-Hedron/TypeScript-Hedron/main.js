@@ -1,3 +1,16 @@
+var __extends = (this && this.__extends) || (function () {
+    var extendStatics = function (d, b) {
+        extendStatics = Object.setPrototypeOf ||
+            ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+            function (d, b) { for (var p in b) if (Object.prototype.hasOwnProperty.call(b, p)) d[p] = b[p]; };
+        return extendStatics(d, b);
+    };
+    return function (d, b) {
+        extendStatics(d, b);
+        function __() { this.constructor = d; }
+        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+    };
+})();
 var engine;
 // The entry point of our application
 window.onload = function () {
@@ -20,9 +33,11 @@ var Hedron;
             this._canvas = Hedron.GLUtilities.init("main-context");
             Hedron.AssetManager.init();
             Hedron.gl.clearColor(0, 0, 0, 1);
-            this.loadShaders();
-            this._shader.use();
-            this._sprite = new Hedron.Sprite("test", "assets/textures/collectibles_004_cricketshead.png");
+            this._basicShader = new Hedron.BasicShader();
+            this._basicShader.use();
+            // Load materials
+            Hedron.MaterialManager.registerMaterial(new Hedron.Material("cricket", "assets/textures/collectibles_004_cricketshead.png", new Hedron.Color(255, 128, 0, 255)));
+            this._sprite = new Hedron.Sprite("test", "cricket");
             this._sprite.position = new Hedron.Vec3(300, 200, 0);
             this._sprite.load();
             this.resize();
@@ -44,21 +59,11 @@ var Hedron;
             Hedron.MessageBus.update(0);
             Hedron.gl.clear(Hedron.gl.COLOR_BUFFER_BIT);
             // Set uniforms
-            var colorPosition = this._shader.getUniformLocation("u_tintColor");
-            Hedron.gl.uniform4f(colorPosition, 1, 0.5, 0, 1);
             //gl.uniform4f(colorPosition, 1, 1, 1, 1);
-            var projectionPosition = this._shader.getUniformLocation("u_projection");
+            var projectionPosition = this._basicShader.getUniformLocation("u_projection");
             Hedron.gl.uniformMatrix4fv(projectionPosition, false, new Float32Array(this._projection.data));
-            var modelPosition = this._shader.getUniformLocation("u_model");
-            var translationMat = Hedron.Matrix4x4.translation(this._sprite.position);
-            Hedron.gl.uniformMatrix4fv(modelPosition, false, new Float32Array(translationMat.data));
-            this._sprite.draw(this._shader);
+            this._sprite.draw(this._basicShader);
             requestAnimationFrame(this.loop.bind(this)); // Call this.loop on this specific instance to emulate an infinite loop
-        };
-        Engine.prototype.loadShaders = function () {
-            var vertexShaderSource = "\nattribute vec3 a_position;\nattribute vec2 a_texCoord;\n\nuniform mat4 u_projection;\nuniform mat4 u_model;\n\nvarying vec2 v_texCoord;\n\nvoid main() {\n    gl_Position = u_projection * u_model * vec4(a_position, 1.0);\n    v_texCoord = a_texCoord;\n}";
-            var fragmentShaderSource = "\nprecision mediump float;\n\nuniform vec4 u_tintColor;\nuniform sampler2D u_diffuse;\n\nvarying vec2 v_texCoord;\n\nvoid main() {\n    gl_FragColor = u_tintColor * texture2D(u_diffuse, v_texCoord);\n}\n";
-            this._shader = new Hedron.Shader("basic", vertexShaderSource, fragmentShaderSource);
         };
         return Engine;
     }());
@@ -103,18 +108,11 @@ var Hedron;
         /**
          * Creates a new shader
          * @param name The name of this shader
-         * @param vertexSource The source of the vertex shader
-         * @param fragmentSource The source of the fragment shader
          */
-        function Shader(name, vertexSource, fragmentSource) {
+        function Shader(name) {
             this._attributes = {};
             this._uniforms = {};
             this._name = name;
-            var vertexShader = this.loadShader(vertexSource, Hedron.gl.VERTEX_SHADER);
-            var fragmentShader = this.loadShader(fragmentSource, Hedron.gl.FRAGMENT_SHADER);
-            this.createProgram(vertexShader, fragmentShader);
-            this.detectAttributes();
-            this.detectUniforms();
         }
         Object.defineProperty(Shader.prototype, "name", {
             /**
@@ -151,6 +149,13 @@ var Hedron;
                 throw new Error("Unable to find uniform named: '" + name + "' in shader named '" + this._name + "'");
             }
             return this._uniforms[name];
+        };
+        Shader.prototype.load = function (vertexSource, fragmentSource) {
+            var vertexShader = this.loadShader(vertexSource, Hedron.gl.VERTEX_SHADER);
+            var fragmentShader = this.loadShader(fragmentSource, Hedron.gl.FRAGMENT_SHADER);
+            this.createProgram(vertexShader, fragmentShader);
+            this.detectAttributes();
+            this.detectUniforms();
         };
         Shader.prototype.loadShader = function (source, shaderType) {
             var shader = Hedron.gl.createShader(shaderType);
@@ -344,15 +349,15 @@ var Hedron;
 var Hedron;
 (function (Hedron) {
     var Sprite = /** @class */ (function () {
-        function Sprite(name, textureName, width, height) {
+        function Sprite(name, materialName, width, height) {
             if (width === void 0) { width = 100; }
             if (height === void 0) { height = 100; }
             this.position = new Hedron.Vec3();
             this._name = name;
             this._width = width;
             this._height = height;
-            this._textureName = textureName;
-            this._texture = Hedron.TextureManager.getTexture(this._textureName);
+            this._materialName = materialName;
+            this._material = Hedron.MaterialManager.getMaterial(this._materialName);
         }
         Object.defineProperty(Sprite.prototype, "name", {
             get: function () {
@@ -363,7 +368,9 @@ var Hedron;
         });
         Sprite.prototype.destroy = function () {
             this._buffer.destroy();
-            Hedron.TextureManager.releaseTexture(this._textureName);
+            Hedron.MaterialManager.releaseMaterial(this._materialName);
+            this._material = undefined;
+            this._materialName = undefined;
         };
         Sprite.prototype.load = function () {
             this._buffer = new Hedron.GLBuffer(5);
@@ -393,9 +400,16 @@ var Hedron;
         Sprite.prototype.update = function (time) {
         };
         Sprite.prototype.draw = function (shader) {
-            this._texture.activateAndBind(0);
-            var diffuseLocation = shader.getUniformLocation("u_diffuse");
-            Hedron.gl.uniform1i(diffuseLocation, 0);
+            var modelLocation = shader.getUniformLocation("u_model");
+            var translationMat = Hedron.Matrix4x4.translation(this.position);
+            Hedron.gl.uniformMatrix4fv(modelLocation, false, new Float32Array(translationMat.data));
+            var colorLocation = shader.getUniformLocation("u_tintColor");
+            Hedron.gl.uniform4fv(colorLocation, this._material.tint.toFloat32Array());
+            if (this._material.diffuseTexture !== undefined) {
+                this._material.diffuseTexture.activateAndBind(0);
+                var diffuseLocation = shader.getUniformLocation("u_diffuse");
+                Hedron.gl.uniform1i(diffuseLocation, 0);
+            }
             this._buffer.bind();
             this._buffer.draw();
         };
@@ -869,5 +883,233 @@ var Hedron;
         return TextureManager;
     }());
     Hedron.TextureManager = TextureManager;
+})(Hedron || (Hedron = {}));
+var Hedron;
+(function (Hedron) {
+    var BasicShader = /** @class */ (function (_super) {
+        __extends(BasicShader, _super);
+        function BasicShader() {
+            var _this = _super.call(this, 'basic') || this;
+            _super.prototype.load.call(_this, _this.getVertexSource(), _this.getFragmentSource());
+            return _this;
+        }
+        BasicShader.prototype.getVertexSource = function () {
+            return "\nattribute vec3 a_position;\nattribute vec2 a_texCoord;\n\nuniform mat4 u_projection;\nuniform mat4 u_model;\n\nvarying vec2 v_texCoord;\n\nvoid main() {\n    gl_Position = u_projection * u_model * vec4(a_position, 1.0);\n    v_texCoord = a_texCoord;\n}";
+        };
+        BasicShader.prototype.getFragmentSource = function () {
+            return "\nprecision mediump float;\n\nuniform vec4 u_tintColor;\nuniform sampler2D u_diffuse;\n\nvarying vec2 v_texCoord;\n\nvoid main() {\n    gl_FragColor = u_tintColor * texture2D(u_diffuse, v_texCoord);\n}\n            ";
+        };
+        return BasicShader;
+    }(Hedron.Shader));
+    Hedron.BasicShader = BasicShader;
+})(Hedron || (Hedron = {}));
+var Hedron;
+(function (Hedron) {
+    var Material = /** @class */ (function () {
+        function Material(name, diffuseTextureName, tint) {
+            this._name = name;
+            this._diffuseTextureName = diffuseTextureName;
+            this._tint = tint;
+            if (this._diffuseTextureName !== undefined) {
+                this._diffuseTexture = Hedron.TextureManager.getTexture(this._diffuseTextureName);
+            }
+        }
+        Object.defineProperty(Material.prototype, "name", {
+            get: function () {
+                return this._name;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Object.defineProperty(Material.prototype, "diffuseTexture", {
+            get: function () {
+                return this._diffuseTexture;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Object.defineProperty(Material.prototype, "diffuseTextureName", {
+            get: function () {
+                return this._diffuseTextureName;
+            },
+            set: function (value) {
+                if (this._diffuseTexture !== undefined) {
+                    Hedron.TextureManager.releaseTexture(this._diffuseTextureName);
+                }
+                this._diffuseTextureName = value;
+                if (this._diffuseTexture !== undefined) {
+                    this._diffuseTexture = Hedron.TextureManager.getTexture(this._diffuseTextureName);
+                }
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Object.defineProperty(Material.prototype, "tint", {
+            get: function () {
+                return this._tint;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Material.prototype.destroy = function () {
+            Hedron.TextureManager.releaseTexture(this._diffuseTextureName);
+            this._diffuseTexture = undefined;
+        };
+        return Material;
+    }());
+    Hedron.Material = Material;
+})(Hedron || (Hedron = {}));
+var Hedron;
+(function (Hedron) {
+    var Color = /** @class */ (function () {
+        function Color(r, g, b, a) {
+            if (r === void 0) { r = 255; }
+            if (g === void 0) { g = 255; }
+            if (b === void 0) { b = 155; }
+            if (a === void 0) { a = 255; }
+            this._r = r;
+            this._g = g;
+            this._b = b;
+            this._a = a;
+        }
+        Object.defineProperty(Color.prototype, "r", {
+            get: function () {
+                return this._r;
+            },
+            set: function (value) {
+                this._r = value;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Object.defineProperty(Color.prototype, "rFloat", {
+            get: function () {
+                return this._r / 255.0;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Object.defineProperty(Color.prototype, "g", {
+            get: function () {
+                return this._g;
+            },
+            set: function (value) {
+                this._g = value;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Object.defineProperty(Color.prototype, "gFloat", {
+            get: function () {
+                return this._g / 255.0;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Object.defineProperty(Color.prototype, "b", {
+            get: function () {
+                return this._b;
+            },
+            set: function (value) {
+                this._b = value;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Object.defineProperty(Color.prototype, "bFloat", {
+            get: function () {
+                return this._b / 255.0;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Object.defineProperty(Color.prototype, "a", {
+            get: function () {
+                return this._a;
+            },
+            set: function (value) {
+                this._a = value;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Object.defineProperty(Color.prototype, "aFloat", {
+            get: function () {
+                return this._a / 255.0;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Color.prototype.toArray = function () {
+            return [this._r, this._g, this._b, this._a];
+        };
+        Color.prototype.toFloatArray = function () {
+            return [this._r / 255.0, this._g / 255.0, this._b / 255.0, this._a / 255.0];
+        };
+        Color.prototype.toFloat32Array = function () {
+            return new Float32Array(this.toFloatArray());
+        };
+        Color.white = function () {
+            return new Color(255, 255, 255, 255);
+        };
+        Color.black = function () {
+            return new Color(0, 0, 0, 0);
+        };
+        Color.red = function () {
+            return new Color(255, 0, 0, 255);
+        };
+        Color.green = function () {
+            return new Color(0, 255, 0, 255);
+        };
+        Color.blue = function () {
+            return new Color(0, 0, 255, 255);
+        };
+        return Color;
+    }());
+    Hedron.Color = Color;
+})(Hedron || (Hedron = {}));
+var Hedron;
+(function (Hedron) {
+    var MaterialReferenceNode = /** @class */ (function () {
+        function MaterialReferenceNode(material) {
+            this.referenceCount = 1;
+            this.material = material;
+        }
+        return MaterialReferenceNode;
+    }());
+    var MaterialManager = /** @class */ (function () {
+        function MaterialManager() {
+        }
+        MaterialManager.registerMaterial = function (material) {
+            if (MaterialManager._materials[material.name] === undefined) {
+                MaterialManager._materials[material.name] = new MaterialReferenceNode(material);
+            }
+        };
+        MaterialManager.getMaterial = function (materialName) {
+            if (MaterialManager._materials[materialName] === undefined) {
+                return undefined;
+            }
+            else {
+                MaterialManager._materials[materialName].referenceCount++;
+                return MaterialManager._materials[materialName].material;
+            }
+        };
+        MaterialManager.releaseMaterial = function (materialName) {
+            if (MaterialManager._materials[materialName] === undefined) {
+                console.log("Cannot release a material which has not been registered.");
+            }
+            else {
+                MaterialManager._materials[materialName].referenceCount--;
+                if (MaterialManager._materials[materialName].referenceCount < 1) {
+                    MaterialManager._materials[materialName].material.destroy();
+                    MaterialManager._materials[materialName].material = undefined;
+                    delete MaterialManager._materials[materialName];
+                }
+            }
+        };
+        MaterialManager._materials = {};
+        return MaterialManager;
+    }());
+    Hedron.MaterialManager = MaterialManager;
 })(Hedron || (Hedron = {}));
 //# sourceMappingURL=main.js.map
