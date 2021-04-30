@@ -40,6 +40,46 @@
             return mat;
         }
 
+        public static rotationZ(angleRadians: number): Matrix4x4 {
+            let mat = Matrix4x4.identity();
+
+            const c = Math.cos(angleRadians);
+            const s = Math.sin(angleRadians);
+
+            mat._data[0] = c;
+            mat._data[1] = s;
+            mat._data[5] = -s;
+            mat._data[6] = c;
+
+            return mat;
+        }
+
+        public static scale(scale: Vec3): Matrix4x4 {
+            let mat = Matrix4x4.identity();
+
+            mat._data[0] = scale.x;
+            mat._data[5] = scale.y;
+            mat._data[10] = scale.z;
+
+            return mat;
+        }
+
+        public static multiply(a: Matrix4x4, b: Matrix4x4): Matrix4x4 {
+            let out = Matrix4x4.identity();
+
+            let sum: number = 0;
+            for (let i = 0; i < 4;i++) {
+                for (let j = 0; j < 4; j++) {
+                    for (let k = 0; k < 4; k++) {
+                        sum += a._data[k + i * 4] * b._data[k + j * 4];
+                    }
+                    out._data[i + j * 4] = sum;
+                }
+            }
+
+            return out;
+        }
+
         public static translation(position: Vec3): Matrix4x4 {
             let mat = Matrix4x4.identity();
 

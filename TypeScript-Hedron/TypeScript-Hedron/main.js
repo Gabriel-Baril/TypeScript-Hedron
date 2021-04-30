@@ -452,6 +452,36 @@ var Hedron;
             mat._data[14] = (farClip + nearClip) * nf;
             return mat;
         };
+        Matrix4x4.rotationZ = function (angleRadians) {
+            var mat = Matrix4x4.identity();
+            var c = Math.cos(angleRadians);
+            var s = Math.sin(angleRadians);
+            mat._data[0] = c;
+            mat._data[1] = s;
+            mat._data[5] = -s;
+            mat._data[6] = c;
+            return mat;
+        };
+        Matrix4x4.scale = function (scale) {
+            var mat = Matrix4x4.identity();
+            mat._data[0] = scale.x;
+            mat._data[5] = scale.y;
+            mat._data[10] = scale.z;
+            return mat;
+        };
+        Matrix4x4.multiply = function (a, b) {
+            var out = Matrix4x4.identity();
+            var sum = 0;
+            for (var i = 0; i < 4; i++) {
+                for (var j = 0; j < 4; j++) {
+                    for (var k = 0; k < 4; k++) {
+                        sum += a._data[k + i * 4] * b._data[k + j * 4];
+                    }
+                    out._data[i + j * 4] = sum;
+                }
+            }
+            return out;
+        };
         Matrix4x4.translation = function (position) {
             var mat = Matrix4x4.identity();
             mat._data[12] = position.x;
@@ -504,11 +534,30 @@ var Hedron;
             enumerable: false,
             configurable: true
         });
+        Object.defineProperty(Vec3, "zero", {
+            get: function () {
+                return new Vec3();
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Object.defineProperty(Vec3, "one", {
+            get: function () {
+                return new Vec3(1, 1, 1);
+            },
+            enumerable: false,
+            configurable: true
+        });
         Vec3.prototype.toArray = function () {
             return [this._x, this._y, this._z];
         };
         Vec3.prototype.toFloat32Array = function () {
             return new Float32Array(this.toArray());
+        };
+        Vec3.prototype.copyFrom = function (vec) {
+            this._x = vec._x;
+            this._y = vec._y;
+            this._z = vec._z;
         };
         return Vec3;
     }());
@@ -1111,5 +1160,210 @@ var Hedron;
         return MaterialManager;
     }());
     Hedron.MaterialManager = MaterialManager;
+})(Hedron || (Hedron = {}));
+var Hedron;
+(function (Hedron) {
+    var Transform = /** @class */ (function () {
+        function Transform() {
+            this.position = Hedron.Vec3.zero;
+            this.rotation = Hedron.Vec3.zero;
+            this.scale = Hedron.Vec3.one;
+        }
+        Transform.prototype.copyFrom = function (tranform) {
+            this.position.copyFrom(tranform.position);
+            this.rotation.copyFrom(tranform.rotation);
+            this.scale.copyFrom(tranform.scale);
+        };
+        Transform.prototype.getTransform = function () {
+            var translation = Hedron.Matrix4x4.translation(this.position);
+            var scale = Hedron.Matrix4x4.scale(this.scale);
+            var rotation = Hedron.Matrix4x4.rotationZ(this.rotation.z); // Todo add x, y for 3d
+            return Hedron.Matrix4x4.multiply(Hedron.Matrix4x4.multiply(translation, rotation), scale);
+        };
+        return Transform;
+    }());
+    Hedron.Transform = Transform;
+})(Hedron || (Hedron = {}));
+var Hedron;
+(function (Hedron) {
+    var SimObject = /** @class */ (function () {
+        function SimObject(id, name, scene) {
+            this._children = [];
+            this._isLoaded = false;
+            this._localMatrix = Hedron.Matrix4x4.identity();
+            this._worldMatrix = Hedron.Matrix4x4.identity();
+            this.transform = new Hedron.Transform();
+            this._id = id;
+            this.name = name;
+            this._scene = scene;
+        }
+        Object.defineProperty(SimObject.prototype, "id", {
+            get: function () {
+                return this._id;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Object.defineProperty(SimObject.prototype, "parent", {
+            get: function () {
+                return this._parent;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Object.defineProperty(SimObject.prototype, "worldMatrix", {
+            get: function () {
+                return this._worldMatrix;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Object.defineProperty(SimObject.prototype, "isLoaded", {
+            get: function () {
+                return this._isLoaded;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        SimObject.prototype.addChild = function (child) {
+            child._parent = this;
+            this._children.push(child);
+            child.onAdded(this._scene);
+        };
+        SimObject.prototype.removeChild = function (child) {
+            var childIndex = this._children.indexOf(child);
+            if (childIndex !== -1) {
+                child._parent = undefined;
+                this._children.splice(childIndex, 1);
+            }
+        };
+        SimObject.prototype.getObjectByName = function (name) {
+            if (this.name === name) {
+                return this;
+            }
+            for (var _i = 0, _a = this._children; _i < _a.length; _i++) {
+                var child = _a[_i];
+                var out = child.getObjectByName(name);
+                if (out !== undefined) {
+                    return out;
+                }
+            }
+            return undefined;
+        };
+        SimObject.prototype.load = function () {
+            this._isLoaded = true;
+            for (var _i = 0, _a = this._children; _i < _a.length; _i++) {
+                var child = _a[_i];
+                child.load();
+            }
+        };
+        SimObject.prototype.update = function (dt) {
+            for (var _i = 0, _a = this._children; _i < _a.length; _i++) {
+                var child = _a[_i];
+                child.update(dt);
+            }
+        };
+        SimObject.prototype.render = function (shader) {
+            for (var _i = 0, _a = this._children; _i < _a.length; _i++) {
+                var child = _a[_i];
+                child.render(shader);
+            }
+        };
+        SimObject.prototype.onAdded = function (scene) {
+            this._scene = scene;
+        };
+        return SimObject;
+    }());
+    Hedron.SimObject = SimObject;
+})(Hedron || (Hedron = {}));
+var Hedron;
+(function (Hedron) {
+    Hedron.ROOT_OBJECT_NAME = "__ROOT__";
+    var Scene = /** @class */ (function () {
+        function Scene() {
+            this._root = new Hedron.SimObject(0, Hedron.ROOT_OBJECT_NAME, this);
+        }
+        Object.defineProperty(Scene.prototype, "root", {
+            get: function () {
+                return this._root;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Object.defineProperty(Scene.prototype, "isLoaded", {
+            get: function () {
+                return this.root.isLoaded;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Scene.prototype.addObject = function (object) {
+            this._root.addChild(object);
+        };
+        Scene.prototype.getObjectByName = function (name) {
+            return this._root.getObjectByName(name);
+        };
+        Scene.prototype.load = function () {
+            this._root.load();
+        };
+        Scene.prototype.update = function (dt) {
+            this._root.update(dt);
+        };
+        Scene.prototype.render = function (shader) {
+            this._root.render(shader);
+        };
+        return Scene;
+    }());
+    Hedron.Scene = Scene;
+})(Hedron || (Hedron = {}));
+var Hedron;
+(function (Hedron) {
+    var Zone = /** @class */ (function () {
+        function Zone(id, name, description) {
+            this._id = id;
+            this._name = name;
+            this._description = description;
+            this._scene = new Hedron.Scene;
+        }
+        Object.defineProperty(Zone.prototype, "id", {
+            get: function () {
+                return this._id;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Object.defineProperty(Zone.prototype, "name", {
+            get: function () {
+                return this._name;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Object.defineProperty(Zone.prototype, "description", {
+            get: function () {
+                return this._description;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Object.defineProperty(Zone.prototype, "scene", {
+            get: function () {
+                return this._scene;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Zone.prototype.load = function () {
+            this._scene.load();
+        };
+        Zone.prototype.update = function (dt) {
+            this._scene.update(dt);
+        };
+        Zone.prototype.render = function (shader) {
+            this._scene.render(shader);
+        };
+        return Zone;
+    }());
+    Hedron.Zone = Zone;
 })(Hedron || (Hedron = {}));
 //# sourceMappingURL=main.js.map

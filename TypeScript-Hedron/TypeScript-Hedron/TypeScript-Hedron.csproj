@@ -115,12 +115,16 @@
     <TypeScriptCompile Include="core\graphics\texture.ts" />
     <TypeScriptCompile Include="core\graphics\textureManager.ts" />
     <TypeScriptCompile Include="core\math\matrix4x4.ts" />
+    <TypeScriptCompile Include="core\math\Transform.ts" />
     <TypeScriptCompile Include="core\math\vec2.ts" />
     <TypeScriptCompile Include="core\math\vec3.ts" />
     <TypeScriptCompile Include="core\message\messageSubscriptionNode.ts" />
     <TypeScriptCompile Include="core\message\IMessageHandler.ts" />
     <TypeScriptCompile Include="core\message\message.ts" />
     <TypeScriptCompile Include="core\message\messageBus.ts" />
+    <TypeScriptCompile Include="core\world\scene.ts" />
+    <TypeScriptCompile Include="core\world\simObject.ts" />
+    <TypeScriptCompile Include="core\world\zone.ts" />
   </ItemGroup>
   <ItemGroup>
     <Service Include="{4A0DDDB5-7A95-4FBF-97CC-616D07737A77}" />

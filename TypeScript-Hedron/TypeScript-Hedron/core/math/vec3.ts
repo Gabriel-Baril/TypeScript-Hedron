@@ -34,12 +34,26 @@
             this._z = value;
         }
 
+        public static get zero(): Vec3 {
+            return new Vec3();
+        }
+
+        public static get one(): Vec3 {
+            return new Vec3(1, 1, 1);
+        }
+
         public toArray(): number[] {
             return [this._x, this._y, this._z];
         }
 
         public toFloat32Array(): Float32Array {
             return new Float32Array(this.toArray());
+        }
+
+        public copyFrom(vec: Vec3): void {
+            this._x = vec._x;
+            this._y = vec._y;
+            this._z = vec._z;
         }
     }
 }
