@@ -8,9 +8,6 @@
         private _materialName: string;
         private _material: Material;
 
-
-        public position: Vec3 = new Vec3();
-
         public constructor(name: string, materialName: string, width: number = 100, height: number = 100) {
             this._name = name;
             this._width = width;
@@ -64,10 +61,9 @@
 
         }
 
-        public draw(shader: Shader): void {
+        public draw(shader: Shader, model: Matrix4x4): void {
             const modelLocation = shader.getUniformLocation("u_model");
-            const translationMat = Matrix4x4.translation(this.position);
-            gl.uniformMatrix4fv(modelLocation, false, new Float32Array(translationMat.data));
+            gl.uniformMatrix4fv(modelLocation, false, model.toFloat32Array());
 
             const colorLocation = shader.getUniformLocation("u_tintColor");
             gl.uniform4fv(colorLocation, this._material.tint.toFloat32Array());

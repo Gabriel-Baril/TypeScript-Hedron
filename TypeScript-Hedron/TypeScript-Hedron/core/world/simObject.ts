@@ -5,10 +5,10 @@
         private _parent: SimObject;
         private _isLoaded: boolean = false;
         private _scene: Scene;
+        private _components: BaseComponent[] = [];
 
         private _localMatrix: Matrix4x4 = Matrix4x4.identity();
         private _worldMatrix: Matrix4x4 = Matrix4x4.identity();
-
 
         public name: string;
         public transform: Transform = new Transform();
@@ -64,20 +64,41 @@
             return undefined;
         }
 
+        public addComponent(component: BaseComponent): void {
+            this._components.push(component);
+            component.setOwner(this);
+        }
+
         public load(): void {
             this._isLoaded = true;
+
+            for (let component of this._components) {
+                component.load();
+            }
+
             for (let child of this._children) {
                 child.load();
             }
         }
 
         public update(dt: number): void {
+            this._localMatrix = this.transform.getTransform();
+            this.updateWorldMatrix((this.parent !== undefined) ? this.parent.worldMatrix : undefined);
+
+            for (let component of this._components) {
+                component.update(dt);
+            }
+
             for (let child of this._children) {
                 child.update(dt);
             }
         }
 
         public render(shader: Shader): void {
+            for (let component of this._components) {
+                component.render(shader);
+            }
+
             for (let child of this._children) {
                 child.render(shader);
             }
@@ -85,6 +106,14 @@
 
         protected onAdded(scene: Scene): void {
             this._scene = scene;
+        }
+
+        private updateWorldMatrix(parentWorldMatrix: Matrix4x4): void {
+            if (parentWorldMatrix !== undefined) {
+                this._worldMatrix = Matrix4x4.multiply(parentWorldMatrix, this._localMatrix);
+            } else {
+                this._worldMatrix.copyFrom(this._localMatrix);
+            }
         }
     }
 }

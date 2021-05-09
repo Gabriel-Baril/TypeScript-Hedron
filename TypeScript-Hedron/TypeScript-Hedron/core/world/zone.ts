@@ -1,9 +1,16 @@
 ﻿namespace Hedron {
+    export enum ZoneState {
+        UNINITIALIZED,
+        LOADING,
+        UPDATING
+    }
+
     export class Zone {
         private _name: string;
         private _description: string;
         private _id: number;
         private _scene: Scene;
+        private _state: ZoneState = ZoneState.UNINITIALIZED;
 
         public constructor(id: number, name: string, description: string) {
             this._id = id;
@@ -29,15 +36,32 @@
         }
 
         public load(): void {
+            this._state = ZoneState.LOADING;
             this._scene.load();
+            this._state = ZoneState.UPDATING;
+        }
+
+        public unload(): void {
         }
 
         public update(dt: number): void {
-            this._scene.update(dt);
+            if (this._state === ZoneState.UPDATING) {
+                this._scene.update(dt);
+            }
         }
 
         public render(shader: Shader): void {
-            this._scene.render(shader);
+            if (this._state === ZoneState.UPDATING) {
+                this._scene.render(shader);
+            }
+        }
+
+        public onActivated(): void {
+
+        }
+
+        public onDeactivated(): void {
+
         }
     }
 }

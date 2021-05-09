@@ -8,7 +8,6 @@
         private _canvas: HTMLCanvasElement;
         private _basicShader: BasicShader;
 
-        private _sprite: Sprite;
         private _projection: Matrix4x4;
 
 
@@ -28,11 +27,10 @@
             // Load materials
             MaterialManager.registerMaterial(new Material("cricket", "assets/textures/collectibles_004_cricketshead.png", new Color(255, 128, 0, 255)));
 
-            this._sprite = new Sprite("test", "cricket");
-            this._sprite.position = new Vec3(300, 200, 0);
-            this._sprite.load();
-
             this.resize();
+
+            let zoneID = ZoneManager.createTestZone();
+            ZoneManager.setActiveZone(zoneID);
 
             this.loop();
         }
@@ -46,23 +44,24 @@
                 this._canvas.height = window.innerHeight; // Represent the height of the page of our client
 
                 gl.viewport(0, 0, this._canvas.width, this._canvas.height);
-                this._projection = Matrix4x4.orthographic(0, this._canvas.width, 0, this._canvas.height, -100, 100);
+                this._projection = Matrix4x4.orthographic(0, this._canvas.width, this._canvas.height, 0, -100, 100);
             }
         }
 
         private loop(): void {
             this._frameCount++;
             MessageBus.update(0);
+            ZoneManager.update(0);
+
             gl.clear(gl.COLOR_BUFFER_BIT);
+
+            ZoneManager.render(this._basicShader);
 
             // Set uniforms
             //gl.uniform4f(colorPosition, 1, 1, 1, 1);
 
             const projectionPosition = this._basicShader.getUniformLocation("u_projection");
             gl.uniformMatrix4fv(projectionPosition, false, new Float32Array(this._projection.data));
-
-
-            this._sprite.draw(this._basicShader);
 
             requestAnimationFrame(this.loop.bind(this)); // Call this.loop on this specific instance to emulate an infinite loop
         }
