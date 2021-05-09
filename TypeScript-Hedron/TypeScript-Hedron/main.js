@@ -28,6 +28,7 @@ var Hedron;
         }
         AssetManager.init = function () {
             AssetManager.registerLoader(new Hedron.ImageAssetLoader());
+            AssetManager.registerLoader(new Hedron.JsonAssetLoader());
         };
         AssetManager.registerLoader = function (loader) {
             AssetManager._loaders.push(loader);
@@ -142,6 +143,29 @@ var Hedron;
 })(Hedron || (Hedron = {}));
 var Hedron;
 (function (Hedron) {
+    var SpriteComponentData = /** @class */ (function () {
+        function SpriteComponentData() {
+        }
+        SpriteComponentData.prototype.setFromJson = function (json) {
+            if (json.name !== undefined) {
+                this.name = String(json.name);
+            }
+            if (json.materialName !== undefined) {
+                this.materialName = String(json.materialName);
+            }
+        };
+        return SpriteComponentData;
+    }());
+    Hedron.SpriteComponentData = SpriteComponentData;
+    var SpriteComponentBuilder = /** @class */ (function () {
+        function SpriteComponentBuilder() {
+        }
+        SpriteComponentBuilder.prototype.buildFromJson = function (json) {
+            throw new Error("Method not implemented.");
+        };
+        return SpriteComponentBuilder;
+    }());
+    Hedron.SpriteComponentBuilder = SpriteComponentBuilder;
     var SpriteComponent = /** @class */ (function (_super) {
         __extends(SpriteComponent, _super);
         function SpriteComponent(name, materialName) {
@@ -172,14 +196,15 @@ var Hedron;
         Engine.prototype.start = function () {
             this._canvas = Hedron.GLUtilities.init("main-context");
             Hedron.AssetManager.init();
+            Hedron.ZoneManager.init();
             Hedron.gl.clearColor(0, 0, 0, 1);
             this._basicShader = new Hedron.BasicShader();
             this._basicShader.use();
             // Load materials
             Hedron.MaterialManager.registerMaterial(new Hedron.Material("cricket", "assets/textures/collectibles_004_cricketshead.png", new Hedron.Color(255, 128, 0, 255)));
             this.resize();
-            var zoneID = Hedron.ZoneManager.createTestZone();
-            Hedron.ZoneManager.setActiveZone(zoneID);
+            // TODO: Change this to be read from a game configuration later
+            Hedron.ZoneManager.setActiveZone(0);
             this.loop();
         };
         /**
@@ -1086,6 +1111,17 @@ var Hedron;
             var rotation = Hedron.Matrix4x4.rotationXYZ(this.rotation.x, this.rotation.y, this.rotation.z); // Todo add x, y for 3d
             return Hedron.Matrix4x4.multiply(Hedron.Matrix4x4.multiply(translation, rotation), scale);
         };
+        Transform.prototype.setFromJson = function (json) {
+            if (json.position !== undefined) {
+                this.position.setFromJson(json.position);
+            }
+            if (json.rotation !== undefined) {
+                this.rotation.setFromJson(json.rotation);
+            }
+            if (json.scale !== undefined) {
+                this.scale.setFromJson(json.scale);
+            }
+        };
         return Transform;
     }());
     Hedron.Transform = Transform;
@@ -1124,6 +1160,14 @@ var Hedron;
         };
         Vec2.prototype.toFloat32Array = function () {
             return new Float32Array(this.toArray());
+        };
+        Vec2.prototype.setFromJson = function (json) {
+            if (json.x !== undefined) {
+                this._x = Number(json.x);
+            }
+            if (json.y !== undefined) {
+                this._y = Number(json.y);
+            }
         };
         return Vec2;
     }());
@@ -1195,20 +1239,20 @@ var Hedron;
             this._y = vec._y;
             this._z = vec._z;
         };
+        Vec3.prototype.setFromJson = function (json) {
+            if (json.x !== undefined) {
+                this._x = Number(json.x);
+            }
+            if (json.y !== undefined) {
+                this._y = Number(json.y);
+            }
+            if (json.z !== undefined) {
+                this._z = Number(json.z);
+            }
+        };
         return Vec3;
     }());
     Hedron.Vec3 = Vec3;
-})(Hedron || (Hedron = {}));
-var Hedron;
-(function (Hedron) {
-    var MessageSubscriptionNode = /** @class */ (function () {
-        function MessageSubscriptionNode(message, handler) {
-            this.message = message;
-            this.handler = handler;
-        }
-        return MessageSubscriptionNode;
-    }());
-    Hedron.MessageSubscriptionNode = MessageSubscriptionNode;
 })(Hedron || (Hedron = {}));
 var Hedron;
 (function (Hedron) {
@@ -1299,6 +1343,17 @@ var Hedron;
         return MessageBus;
     }());
     Hedron.MessageBus = MessageBus;
+})(Hedron || (Hedron = {}));
+var Hedron;
+(function (Hedron) {
+    var MessageSubscriptionNode = /** @class */ (function () {
+        function MessageSubscriptionNode(message, handler) {
+            this.message = message;
+            this.handler = handler;
+        }
+        return MessageSubscriptionNode;
+    }());
+    Hedron.MessageSubscriptionNode = MessageSubscriptionNode;
 })(Hedron || (Hedron = {}));
 var Hedron;
 (function (Hedron) {
@@ -1470,6 +1525,7 @@ var Hedron;
     var Zone = /** @class */ (function () {
         function Zone(id, name, description) {
             this._state = ZoneState.UNINITIALIZED;
+            this._globalId = -1;
             this._id = id;
             this._name = name;
             this._description = description;
@@ -1503,6 +1559,17 @@ var Hedron;
             enumerable: false,
             configurable: true
         });
+        Zone.prototype.init = function (zoneData) {
+            if (zoneData.objects === undefined) {
+                throw new Error("Zone initialization exception: objects field not present");
+            }
+            else {
+                for (var o in zoneData.objects) {
+                    var obj = zoneData.objects[o];
+                    this.loadSimObject(obj, this._scene.root);
+                }
+            }
+        };
         Zone.prototype.load = function () {
             this._state = ZoneState.LOADING;
             this._scene.load();
@@ -1523,6 +1590,26 @@ var Hedron;
         Zone.prototype.onActivated = function () {
         };
         Zone.prototype.onDeactivated = function () {
+        };
+        Zone.prototype.loadSimObject = function (dataSection, parent) {
+            var name;
+            if (dataSection.name !== undefined) {
+                name = String(dataSection.name);
+            }
+            this._globalId++;
+            var simObject = new Hedron.SimObject(this._globalId, name, this._scene);
+            if (dataSection.transform !== undefined) {
+                simObject.transform.setFromJson(dataSection.transform);
+            }
+            if (dataSection.children !== undefined) {
+                for (var o in dataSection.children) {
+                    var obj = dataSection.children[o];
+                    this.loadSimObject(obj, simObject);
+                }
+            }
+            if (parent !== undefined) {
+                parent.addChild(simObject);
+            }
         };
         return Zone;
     }());
@@ -1565,28 +1652,29 @@ var Hedron;
     var ZoneManager = /** @class */ (function () {
         function ZoneManager() {
         }
-        ZoneManager.registerZone = function (name, description) {
-            ZoneManager._globalZoneID++;
-            var zone = new Hedron.Zone(ZoneManager._globalZoneID, name, description);
-            ZoneManager._zones[ZoneManager._globalZoneID] = zone;
-            return ZoneManager._globalZoneID;
-        };
-        // TODO: Temporary code
-        ZoneManager.createTestZone = function () {
-            ZoneManager._globalZoneID++;
-            var zone = new Hedron.TestZone(ZoneManager._globalZoneID, "test", "Simple text zone");
-            ZoneManager._zones[ZoneManager._globalZoneID] = zone;
-            return ZoneManager._globalZoneID;
+        ZoneManager.init = function () {
+            ZoneManager._instance = new ZoneManager();
+            // TEMP
+            ZoneManager._registeredZones[0] = "assets/zones/testZone.json";
         };
         ZoneManager.setActiveZone = function (id) {
             if (ZoneManager._activeZone !== undefined) {
                 ZoneManager._activeZone.onDeactivated();
                 ZoneManager._activeZone.unload();
+                ZoneManager._activeZone = undefined;
             }
-            if (ZoneManager._zones[id] !== undefined) {
-                ZoneManager._activeZone = ZoneManager._zones[id];
-                ZoneManager._activeZone.onActivated();
-                ZoneManager._activeZone.load();
+            if (ZoneManager._registeredZones[id] !== undefined) {
+                if (Hedron.AssetManager.isAssetLoaded(ZoneManager._registeredZones[id])) {
+                    var asset = Hedron.AssetManager.getAsset(ZoneManager._registeredZones[id]);
+                    ZoneManager.loadZone(asset);
+                }
+                else {
+                    Hedron.Message.subscribe(Hedron.MESSAGE_ASSET_LOADER_ASSET_LOADED + ZoneManager._registeredZones[id], ZoneManager._instance);
+                    Hedron.AssetManager.loadAsset(ZoneManager._registeredZones[id]);
+                }
+            }
+            else {
+                throw new Error("Zone id:" + id.toString() + " does not exist.");
             }
         };
         ZoneManager.update = function (dt) {
@@ -1599,10 +1687,80 @@ var Hedron;
                 ZoneManager._activeZone.render(shader);
             }
         };
+        ZoneManager.loadZone = function (asset) {
+            var zoneData = asset.data;
+            var zoneId;
+            if (zoneData.id === undefined) {
+                throw new Error("Zone file format exception: Zone id not present");
+            }
+            else {
+                zoneId = Number(zoneData.id);
+            }
+            var zoneName;
+            if (zoneData.name === undefined) {
+                throw new Error("Zone file format exception: Zone name not present");
+            }
+            else {
+                zoneName = String(zoneData.id);
+            }
+            var zoneDescription;
+            if (zoneData.description !== undefined) {
+                zoneDescription = String(zoneData.description);
+            }
+            ZoneManager._activeZone = new Hedron.Zone(zoneId, zoneName, zoneDescription);
+            ZoneManager._activeZone.init(zoneData);
+            ZoneManager._activeZone.onActivated();
+            ZoneManager._activeZone.load();
+        };
+        ZoneManager.prototype.onMessage = function (message) {
+            if (message.code.indexOf(Hedron.MESSAGE_ASSET_LOADER_ASSET_LOADED)) {
+                var asset = message.context;
+                ZoneManager.loadZone(asset);
+            }
+        };
         ZoneManager._globalZoneID = -1;
-        ZoneManager._zones = {};
+        // private static _zones: { [id: number]: Zone } = {};
+        ZoneManager._registeredZones = {};
         return ZoneManager;
     }());
     Hedron.ZoneManager = ZoneManager;
+})(Hedron || (Hedron = {}));
+var Hedron;
+(function (Hedron) {
+    var JsonAsset = /** @class */ (function () {
+        function JsonAsset(name, data) {
+            this.name = name;
+            this.data = data;
+        }
+        return JsonAsset;
+    }());
+    Hedron.JsonAsset = JsonAsset;
+    var JsonAssetLoader = /** @class */ (function () {
+        function JsonAssetLoader() {
+        }
+        Object.defineProperty(JsonAssetLoader.prototype, "supportedExtensions", {
+            get: function () {
+                return ['json'];
+            },
+            enumerable: false,
+            configurable: true
+        });
+        JsonAssetLoader.prototype.loadAsset = function (assetName) {
+            var request = new XMLHttpRequest();
+            request.open("GET", assetName);
+            request.addEventListener("load", this.onJsonLoaded.bind(this, assetName, request));
+            request.send();
+        };
+        JsonAssetLoader.prototype.onJsonLoaded = function (assetName, request, event) {
+            console.log("onJsonLoaded: assetName/json", assetName, request);
+            if (request.readyState === request.DONE) {
+                var json = JSON.parse(request.responseText);
+                var asset = new JsonAsset(assetName, json);
+                Hedron.AssetManager.onAssetLoaded(asset);
+            }
+        };
+        return JsonAssetLoader;
+    }());
+    Hedron.JsonAssetLoader = JsonAssetLoader;
 })(Hedron || (Hedron = {}));
 //# sourceMappingURL=main.js.map

@@ -11,6 +11,7 @@
 
         public static init(): void {
             AssetManager.registerLoader(new ImageAssetLoader());
+            AssetManager.registerLoader(new JsonAssetLoader());
         }
 
         public static registerLoader(loader: IAssetLoader): void {

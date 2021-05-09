@@ -18,6 +18,7 @@
         public start(): void {
             this._canvas = GLUtilities.init("main-context");
             AssetManager.init();
+            ZoneManager.init();
 
             gl.clearColor(0, 0, 0, 1);
 
@@ -29,8 +30,8 @@
 
             this.resize();
 
-            let zoneID = ZoneManager.createTestZone();
-            ZoneManager.setActiveZone(zoneID);
+            // TODO: Change this to be read from a game configuration later
+            ZoneManager.setActiveZone(0);
 
             this.loop();
         }
