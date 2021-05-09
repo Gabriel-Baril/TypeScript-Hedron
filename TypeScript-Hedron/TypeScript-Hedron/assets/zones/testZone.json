@@ -20,14 +20,33 @@
 							"y": 120
 						},
 						"rotation": {
-							"z": 180
+							"z": 0
 						},
 						"scale": {
 							"x": 1,
 							"y": 1,
 							"z": 1
 						}
-					}
+					},
+					"components": [
+						{
+							"type": "sprite",
+							"name": "test",
+							"materialName": "cricket"
+						}
+					]
+				}
+			],
+			"components": [
+				{
+					"type": "sprite",
+					"name": "test",
+					"materialName": "cricket"
+				}
+			],
+			"behaviors": [
+				{
+					"name": "ra"
 				}
 			]
 		}

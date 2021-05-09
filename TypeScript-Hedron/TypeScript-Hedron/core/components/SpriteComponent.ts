@@ -1,8 +1,11 @@
-﻿namespace Hedron {
+﻿/// <reference path="componentmanager.ts" />
 
+namespace Hedron {
+
+    // Extract sprite component informations fron json file
     export class SpriteComponentData implements IComponentData {
         public name: string;
-        public materialName: String;
+        public materialName: string;
 
         public setFromJson(json: any) {
             if (json.name !== undefined) {
@@ -15,20 +18,26 @@
         }
     }
 
-    export class SpriteComponentBuilder implements IcomponentBuilder {
-        type: string;
-
+    // Build a SpriteComponent from a json
+    export class SpriteComponentBuilder implements IComponentBuilder {
         buildFromJson(json: any): IComponent {
-            throw new Error("Method not implemented.");
+            const data = new SpriteComponentData();
+            data.setFromJson(json);
+            return new SpriteComponent(data);
+        }
+
+        public get type(): string {
+            return "sprite";
         }
     }
 
     export class SpriteComponent extends BaseComponent {
         private _sprite: Sprite;
 
-        public constructor(name: string, materialName: string) {
-            super(name);
-            this._sprite = new Sprite(name, materialName);
+        public constructor(data: SpriteComponentData) {
+            super(data);
+
+            this._sprite = new Sprite(data.name, data.materialName);
         }
 
         public load(): void {
@@ -40,4 +49,6 @@
             super.render(shader);
         }
     }
+
+    ComponentManager.registerBuilder(new SpriteComponentBuilder());
 }

@@ -90,6 +90,14 @@
                 simObject.transform.setFromJson(dataSection.transform);
             }
 
+            if (dataSection.components !== undefined) {
+                for (let c in dataSection.components) {
+                    let data = dataSection.components[c];
+                    let component = ComponentManager.extractComponent(data);
+                    simObject.addComponent(component);
+                }
+            }
+
             if (dataSection.children !== undefined) {
                 for (let o in dataSection.children) {
                     const obj = dataSection.children[o];

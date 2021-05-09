@@ -119,7 +119,9 @@ var Hedron;
 var Hedron;
 (function (Hedron) {
     var BaseComponent = /** @class */ (function () {
-        function BaseComponent(name) {
+        function BaseComponent(data) {
+            this._data = data;
+            this.name = data.name;
         }
         Object.defineProperty(BaseComponent.prototype, "owner", {
             get: function () {
@@ -143,6 +145,29 @@ var Hedron;
 })(Hedron || (Hedron = {}));
 var Hedron;
 (function (Hedron) {
+    var ComponentManager = /** @class */ (function () {
+        function ComponentManager() {
+        }
+        ComponentManager.registerBuilder = function (builder) {
+            ComponentManager._registeredBuilders[builder.type] = builder;
+        };
+        ComponentManager.extractComponent = function (json) {
+            if (json.type !== undefined) {
+                if (ComponentManager._registeredBuilders[String(json.type)] !== undefined) {
+                    return ComponentManager._registeredBuilders[String(json.type)].buildFromJson(json);
+                }
+            }
+            throw new Error("Component manager error - type is missing or builder not registered for this type");
+        };
+        ComponentManager._registeredBuilders = {};
+        return ComponentManager;
+    }());
+    Hedron.ComponentManager = ComponentManager;
+})(Hedron || (Hedron = {}));
+/// <reference path="componentmanager.ts" />
+var Hedron;
+(function (Hedron) {
+    // Extract sprite component informations fron json file
     var SpriteComponentData = /** @class */ (function () {
         function SpriteComponentData() {
         }
@@ -157,20 +182,30 @@ var Hedron;
         return SpriteComponentData;
     }());
     Hedron.SpriteComponentData = SpriteComponentData;
+    // Build a SpriteComponent from a json
     var SpriteComponentBuilder = /** @class */ (function () {
         function SpriteComponentBuilder() {
         }
         SpriteComponentBuilder.prototype.buildFromJson = function (json) {
-            throw new Error("Method not implemented.");
+            var data = new SpriteComponentData();
+            data.setFromJson(json);
+            return new SpriteComponent(data);
         };
+        Object.defineProperty(SpriteComponentBuilder.prototype, "type", {
+            get: function () {
+                return "sprite";
+            },
+            enumerable: false,
+            configurable: true
+        });
         return SpriteComponentBuilder;
     }());
     Hedron.SpriteComponentBuilder = SpriteComponentBuilder;
     var SpriteComponent = /** @class */ (function (_super) {
         __extends(SpriteComponent, _super);
-        function SpriteComponent(name, materialName) {
-            var _this = _super.call(this, name) || this;
-            _this._sprite = new Hedron.Sprite(name, materialName);
+        function SpriteComponent(data) {
+            var _this = _super.call(this, data) || this;
+            _this._sprite = new Hedron.Sprite(data.name, data.materialName);
             return _this;
         }
         SpriteComponent.prototype.load = function () {
@@ -183,6 +218,7 @@ var Hedron;
         return SpriteComponent;
     }(Hedron.BaseComponent));
     Hedron.SpriteComponent = SpriteComponent;
+    Hedron.ComponentManager.registerBuilder(new SpriteComponentBuilder());
 })(Hedron || (Hedron = {}));
 var Hedron;
 (function (Hedron) {
@@ -1601,6 +1637,13 @@ var Hedron;
             if (dataSection.transform !== undefined) {
                 simObject.transform.setFromJson(dataSection.transform);
             }
+            if (dataSection.components !== undefined) {
+                for (var c in dataSection.components) {
+                    var data = dataSection.components[c];
+                    var component = Hedron.ComponentManager.extractComponent(data);
+                    simObject.addComponent(component);
+                }
+            }
             if (dataSection.children !== undefined) {
                 for (var o in dataSection.children) {
                     var obj = dataSection.children[o];
@@ -1616,37 +1659,43 @@ var Hedron;
     Hedron.Zone = Zone;
 })(Hedron || (Hedron = {}));
 /// <reference path="zone.ts" />
-var Hedron;
-(function (Hedron) {
-    var TestZone = /** @class */ (function (_super) {
-        __extends(TestZone, _super);
-        function TestZone() {
-            return _super !== null && _super.apply(this, arguments) || this;
-        }
-        TestZone.prototype.load = function () {
-            this._parentObject = new Hedron.SimObject(0, "parentObject");
-            this._parentObject.transform.position.x = 600;
-            this._parentObject.transform.position.y = 300;
-            this._parentSprite = new Hedron.SpriteComponent("test", "cricket");
-            this._parentObject.addComponent(this._parentSprite);
-            this._testObject = new Hedron.SimObject(0, "testObject");
-            this._testSprite = new Hedron.SpriteComponent("test", "cricket");
-            this._testObject.addComponent(this._testSprite);
-            this._testObject.transform.position.x = 300;
-            this._testObject.transform.position.y = 300;
-            this._parentObject.addChild(this._testObject);
-            this.scene.addObject(this._parentObject);
-            _super.prototype.load.call(this);
-        };
-        TestZone.prototype.update = function (dt) {
-            this._parentObject.transform.rotation.z += 0.01;
-            this._testObject.transform.rotation.z += 0.1;
-            _super.prototype.update.call(this, dt);
-        };
-        return TestZone;
-    }(Hedron.Zone));
-    Hedron.TestZone = TestZone;
-})(Hedron || (Hedron = {}));
+// 
+// namespace Hedron {
+//     export class TestZone extends Zone {
+//         private _parentObject: SimObject;
+//         private _parentSprite: SpriteComponent;
+// 
+//         private _testObject: SimObject;
+//         private _testSprite: SpriteComponent;
+// 
+//         public load(): void {
+//             this._parentObject = new SimObject(0, "parentObject");
+//             this._parentObject.transform.position.x = 600;
+//             this._parentObject.transform.position.y = 300;
+//             this._parentSprite = new SpriteComponent("test", "cricket");
+//             this._parentObject.addComponent(this._parentSprite);
+// 
+//             this._testObject = new SimObject(0, "testObject");
+//             this._testSprite = new SpriteComponent("test", "cricket");
+//             this._testObject.addComponent(this._testSprite);
+// 
+//             this._testObject.transform.position.x = 300;
+//             this._testObject.transform.position.y = 300;
+// 
+//             this._parentObject.addChild(this._testObject);
+// 
+//             this.scene.addObject(this._parentObject);
+// 
+//             super.load();
+//         }
+// 
+//         public update(dt: number): void {
+//             this._parentObject.transform.rotation.z += 0.01;
+//             this._testObject.transform.rotation.z += 0.1;
+//             super.update(dt);
+//         }
+//     }
+// }
 var Hedron;
 (function (Hedron) {
     var ZoneManager = /** @class */ (function () {
@@ -1713,7 +1762,8 @@ var Hedron;
             ZoneManager._activeZone.load();
         };
         ZoneManager.prototype.onMessage = function (message) {
-            if (message.code.indexOf(Hedron.MESSAGE_ASSET_LOADER_ASSET_LOADED)) {
+            if (message.code.indexOf(Hedron.MESSAGE_ASSET_LOADER_ASSET_LOADED) !== -1) {
+                console.log("Zone loaded:" + message.code);
                 var asset = message.context;
                 ZoneManager.loadZone(asset);
             }

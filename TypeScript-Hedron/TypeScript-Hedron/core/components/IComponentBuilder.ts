@@ -1,5 +1,5 @@
 ﻿namespace Hedron {
-    export interface IcomponentBuilder {
+    export interface IComponentBuilder {
         readonly type: string;
 
         buildFromJson(json: any): IComponent;
