@@ -1286,6 +1286,30 @@ var Hedron;
                 this._z = Number(json.z);
             }
         };
+        Vec3.prototype.add = function (v) {
+            this._x += v._x;
+            this._y += v._y;
+            this._z += v._z;
+            return this;
+        };
+        Vec3.prototype.substract = function (v) {
+            this._x -= v._x;
+            this._y -= v._y;
+            this._z -= v._z;
+            return this;
+        };
+        Vec3.prototype.multiply = function (v) {
+            this._x *= v._x;
+            this._y *= v._y;
+            this._z *= v._z;
+            return this;
+        };
+        Vec3.prototype.divide = function (v) {
+            this._x /= v._x;
+            this._y /= v._y;
+            this._z /= v._z;
+            return this;
+        };
         return Vec3;
     }());
     Hedron.Vec3 = Vec3;
@@ -1438,6 +1462,7 @@ var Hedron;
             this._children = [];
             this._isLoaded = false;
             this._components = [];
+            this._behaviors = [];
             this._localMatrix = Hedron.Matrix4x4.identity();
             this._worldMatrix = Hedron.Matrix4x4.identity();
             this.transform = new Hedron.Transform();
@@ -1502,6 +1527,10 @@ var Hedron;
             this._components.push(component);
             component.setOwner(this);
         };
+        SimObject.prototype.addBehavior = function (behavior) {
+            this._behaviors.push(behavior);
+            behavior.setOwner(this);
+        };
         SimObject.prototype.load = function () {
             this._isLoaded = true;
             for (var _i = 0, _a = this._components; _i < _a.length; _i++) {
@@ -1520,8 +1549,12 @@ var Hedron;
                 var component = _a[_i];
                 component.update(dt);
             }
-            for (var _b = 0, _c = this._children; _b < _c.length; _b++) {
-                var child = _c[_b];
+            for (var _b = 0, _c = this._behaviors; _b < _c.length; _b++) {
+                var behavior = _c[_b];
+                behavior.update(dt);
+            }
+            for (var _d = 0, _e = this._children; _d < _e.length; _d++) {
+                var child = _e[_d];
                 child.update(dt);
             }
         };
@@ -1642,6 +1675,13 @@ var Hedron;
                     var data = dataSection.components[c];
                     var component = Hedron.ComponentManager.extractComponent(data);
                     simObject.addComponent(component);
+                }
+            }
+            if (dataSection.behaviors !== undefined) {
+                for (var b in dataSection.behaviors) {
+                    var data = dataSection.behaviors[b];
+                    var behavior = Hedron.BehaviorManager.extractBehavior(data);
+                    simObject.addBehavior(behavior);
                 }
             }
             if (dataSection.children !== undefined) {
@@ -1812,5 +1852,98 @@ var Hedron;
         return JsonAssetLoader;
     }());
     Hedron.JsonAssetLoader = JsonAssetLoader;
+})(Hedron || (Hedron = {}));
+var Hedron;
+(function (Hedron) {
+    var BehaviorManager = /** @class */ (function () {
+        function BehaviorManager() {
+        }
+        BehaviorManager.registerBuilder = function (builder) {
+            BehaviorManager._registeredBuilders[builder.type] = builder;
+        };
+        BehaviorManager.extractBehavior = function (json) {
+            if (json.type !== undefined) {
+                if (BehaviorManager._registeredBuilders[String(json.type)] !== undefined) {
+                    return BehaviorManager._registeredBuilders[String(json.type)].buildFromJson(json);
+                }
+            }
+            throw new Error("Behavior manager error - type is missing or builder not registered for this type");
+        };
+        BehaviorManager._registeredBuilders = {};
+        return BehaviorManager;
+    }());
+    Hedron.BehaviorManager = BehaviorManager;
+})(Hedron || (Hedron = {}));
+var Hedron;
+(function (Hedron) {
+    var BaseBehavior = /** @class */ (function () {
+        function BaseBehavior(data) {
+            this._data = data;
+            this.name = this._data.name;
+        }
+        BaseBehavior.prototype.setOwner = function (owner) {
+            this._owner = owner;
+        };
+        BaseBehavior.prototype.update = function (time) {
+        };
+        BaseBehavior.prototype.apply = function (userData) {
+        };
+        return BaseBehavior;
+    }());
+    Hedron.BaseBehavior = BaseBehavior;
+})(Hedron || (Hedron = {}));
+/// <reference path="behaviormanager.ts" />
+/// <reference path="basebehavior.ts" />
+var Hedron;
+(function (Hedron) {
+    var RotationBehaviorData = /** @class */ (function () {
+        function RotationBehaviorData() {
+            this.rotation = Hedron.Vec3.zero;
+        }
+        RotationBehaviorData.prototype.setFromJson = function (json) {
+            if (json.name === undefined) {
+                throw new Error("Name must be defined in behavior data.");
+            }
+            this.name = String(json.name);
+            if (json.rotation !== undefined) {
+                this.rotation.setFromJson(json.rotation);
+            }
+        };
+        return RotationBehaviorData;
+    }());
+    Hedron.RotationBehaviorData = RotationBehaviorData;
+    var RotationBehaviorBuilder = /** @class */ (function () {
+        function RotationBehaviorBuilder() {
+        }
+        Object.defineProperty(RotationBehaviorBuilder.prototype, "type", {
+            get: function () {
+                return "rotation";
+            },
+            enumerable: false,
+            configurable: true
+        });
+        RotationBehaviorBuilder.prototype.buildFromJson = function (json) {
+            var data = new RotationBehaviorData();
+            data.setFromJson(json);
+            return new RotationBehavior(data);
+        };
+        return RotationBehaviorBuilder;
+    }());
+    Hedron.RotationBehaviorBuilder = RotationBehaviorBuilder;
+    var RotationBehavior = /** @class */ (function (_super) {
+        __extends(RotationBehavior, _super);
+        function RotationBehavior(data) {
+            var _this = _super.call(this, data) || this;
+            _this._rotation = data.rotation;
+            return _this;
+        }
+        RotationBehavior.prototype.update = function (time) {
+            this._owner.transform.rotation.add(this._rotation);
+            _super.prototype.update.call(this, time);
+        };
+        return RotationBehavior;
+    }(Hedron.BaseBehavior));
+    Hedron.RotationBehavior = RotationBehavior;
+    Hedron.BehaviorManager.registerBuilder(new RotationBehaviorBuilder());
 })(Hedron || (Hedron = {}));
 //# sourceMappingURL=main.js.map

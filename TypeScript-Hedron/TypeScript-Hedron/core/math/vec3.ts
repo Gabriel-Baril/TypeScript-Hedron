@@ -69,5 +69,37 @@
                 this._z = Number(json.z)
             }
         }
+
+        public add(v: Vec3): Vec3 {
+            this._x += v._x;
+            this._y += v._y;
+            this._z += v._z;
+
+            return this;
+        }
+
+        public substract(v: Vec3): Vec3 {
+            this._x -= v._x;
+            this._y -= v._y;
+            this._z -= v._z;
+
+            return this;
+        }
+
+        public multiply(v: Vec3): Vec3 {
+            this._x *= v._x;
+            this._y *= v._y;
+            this._z *= v._z;
+
+            return this;
+        }
+
+        public divide(v: Vec3): Vec3 {
+            this._x /= v._x;
+            this._y /= v._y;
+            this._z /= v._z;
+
+            return this;
+        }
     }
 }

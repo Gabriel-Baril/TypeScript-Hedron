@@ -6,6 +6,7 @@
         private _isLoaded: boolean = false;
         private _scene: Scene;
         private _components: IComponent[] = [];
+        private _behaviors: IBehavior[] = [];
 
         private _localMatrix: Matrix4x4 = Matrix4x4.identity();
         private _worldMatrix: Matrix4x4 = Matrix4x4.identity();
@@ -69,6 +70,11 @@
             component.setOwner(this);
         }
 
+        public addBehavior(behavior: IBehavior): void {
+            this._behaviors.push(behavior);
+            behavior.setOwner(this);
+        }
+
         public load(): void {
             this._isLoaded = true;
 
@@ -87,6 +93,10 @@
 
             for (let component of this._components) {
                 component.update(dt);
+            }
+
+            for (let behavior of this._behaviors) {
+                behavior.update(dt);
             }
 
             for (let child of this._children) {

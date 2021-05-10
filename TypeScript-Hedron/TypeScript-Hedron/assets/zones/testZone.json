@@ -46,7 +46,11 @@
 			],
 			"behaviors": [
 				{
-					"name": "ra"
+					"name": "rotateZ",
+					"type": "rotation",
+					"rotation": {
+						"z": 0.01
+					}
 				}
 			]
 		}
